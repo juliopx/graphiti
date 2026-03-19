@@ -36,7 +36,7 @@ WORKDIR /app/mcp
 ARG GRAPHITI_CORE_VERSION=0.28.1
 
 # Copy project files for dependency installation
-COPY pyproject.toml uv.lock ./
+COPY mcp_server/pyproject.toml mcp_server/uv.lock ./
 
 # Remove the local path override for graphiti-core in Docker builds
 # and regenerate lock file to match the PyPI version
@@ -55,13 +55,18 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Store graphiti-core version
 RUN echo "${GRAPHITI_CORE_VERSION}" > /app/mcp/.graphiti-core-version
 
+# Patch graphiti-core prompts to handle non-standard field names from local LLMs
+# (models may return entity_name/text instead of name, source_entity instead of source_entity_name)
+COPY graphiti_core/prompts/extract_nodes.py .venv/lib/python3.11/site-packages/graphiti_core/prompts/extract_nodes.py
+COPY graphiti_core/prompts/extract_edges.py .venv/lib/python3.11/site-packages/graphiti_core/prompts/extract_edges.py
+
 # Copy MCP server application code
-COPY main.py ./
-COPY src/ ./src/
-COPY config/ ./config/
+COPY mcp_server/main.py ./
+COPY mcp_server/src/ ./src/
+COPY mcp_server/config/ ./config/
 
 # Copy FalkorDB combined config (uses localhost since both services in same container)
-COPY config/config-docker-falkordb-combined.yaml /app/mcp/config/config.yaml
+COPY mcp_server/config/config-docker-falkordb-combined.yaml /app/mcp/config/config.yaml
 
 # Create log and data directories
 RUN mkdir -p /var/log/graphiti /var/lib/falkordb/data

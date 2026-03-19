@@ -16,7 +16,7 @@ limitations under the License.
 
 from typing import Any, Protocol, TypedDict
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .models import Message, PromptFunction, PromptVersion
 from .prompt_helpers import to_prompt_json
@@ -24,11 +24,21 @@ from .prompt_helpers import to_prompt_json
 
 class Edge(BaseModel):
     source_entity_name: str = Field(
-        ..., description='The name of the source entity from the ENTITIES list'
+        '', description='The name of the source entity from the ENTITIES list'
     )
     target_entity_name: str = Field(
-        ..., description='The name of the target entity from the ENTITIES list'
+        '', description='The name of the target entity from the ENTITIES list'
     )
+
+    @model_validator(mode='before')
+    @classmethod
+    def coerce_entity_names(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get('source_entity_name') and data.get('source_entity'):
+                data['source_entity_name'] = data['source_entity']
+            if not data.get('target_entity_name') and data.get('target_entity'):
+                data['target_entity_name'] = data['target_entity']
+        return data
     relation_type: str = Field(
         ...,
         description='The type of relationship between the entities, in SCREAMING_SNAKE_CASE (e.g., WORKS_AT, LIVES_IN, IS_FRIENDS_WITH)',

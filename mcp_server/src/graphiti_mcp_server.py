@@ -8,6 +8,7 @@ import asyncio
 import logging
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -326,6 +327,7 @@ async def add_memory(
     source: str = 'text',
     source_description: str = '',
     uuid: str | None = None,
+    reference_time: str | None = None,
 ) -> SuccessResponse | ErrorResponse:
     """Add an episode to memory. This is the primary way to add information to the graph.
 
@@ -385,6 +387,13 @@ async def add_memory(
                 episode_type = EpisodeType.text
 
         # Submit to queue service for async processing
+        parsed_reference_time: datetime | None = None
+        if reference_time:
+            try:
+                parsed_reference_time = datetime.fromisoformat(reference_time.replace('Z', '+00:00'))
+            except ValueError:
+                pass
+
         await queue_service.add_episode(
             group_id=effective_group_id,
             name=name,
@@ -392,7 +401,8 @@ async def add_memory(
             source_description=source_description,
             episode_type=episode_type,
             entity_types=graphiti_service.entity_types,
-            uuid=uuid or None,  # Ensure None is passed if uuid is None
+            uuid=uuid or None,
+            reference_time=parsed_reference_time,
         )
 
         return SuccessResponse(
@@ -591,6 +601,37 @@ async def delete_episode(uuid: str) -> SuccessResponse | ErrorResponse:
 
 
 @mcp.tool()
+async def get_episode_by_uuid(uuid: str) -> dict[str, Any] | ErrorResponse:
+    """Get a single episode from the graph memory by its UUID, including valid_at (reference_time).
+
+    Args:
+        uuid: UUID of the episode to retrieve
+    """
+    global graphiti_service
+
+    if graphiti_service is None:
+        return ErrorResponse(error='Graphiti service not initialized')
+
+    try:
+        client = await graphiti_service.get_client()
+        episode = await EpisodicNode.get_by_uuid(client.driver, uuid)
+        return {
+            'uuid': episode.uuid,
+            'name': episode.name,
+            'content': episode.content,
+            'created_at': episode.created_at.isoformat() if episode.created_at else None,
+            'valid_at': episode.valid_at.isoformat() if episode.valid_at else None,
+            'source': episode.source.value if hasattr(episode.source, 'value') else str(episode.source),
+            'source_description': episode.source_description,
+            'group_id': episode.group_id,
+        }
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error getting episode by UUID: {error_msg}')
+        return ErrorResponse(error=f'Error getting episode by UUID: {error_msg}')
+
+
+@mcp.tool()
 async def get_entity_edge(uuid: str) -> dict[str, Any] | ErrorResponse:
     """Get an entity edge from the graph memory by its UUID.
 
@@ -668,6 +709,7 @@ async def get_episodes(
                 'name': episode.name,
                 'content': episode.content,
                 'created_at': episode.created_at.isoformat() if episode.created_at else None,
+                'valid_at': episode.valid_at.isoformat() if episode.valid_at else None,
                 'source': episode.source.value
                 if hasattr(episode.source, 'value')
                 else str(episode.source),

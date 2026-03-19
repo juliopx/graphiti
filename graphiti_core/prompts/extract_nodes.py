@@ -16,7 +16,7 @@ limitations under the License.
 
 from typing import Any, Protocol, TypedDict
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from graphiti_core.utils.text_utils import MAX_SUMMARY_CHARS
 
@@ -26,11 +26,21 @@ from .snippets import summary_instructions
 
 
 class ExtractedEntity(BaseModel):
-    name: str = Field(..., description='Name of the extracted entity')
+    name: str = Field('', description='Name of the extracted entity')
     entity_type_id: int = Field(
         description='ID of the classified entity type. '
         'Must be one of the provided entity_type_id integers.',
     )
+
+    @model_validator(mode='before')
+    @classmethod
+    def coerce_name(cls, data: Any) -> Any:
+        if isinstance(data, dict) and not data.get('name'):
+            for alt in ('entity_name', 'text', 'label', 'title'):
+                if data.get(alt):
+                    data['name'] = data[alt]
+                    break
+        return data
 
 
 class ExtractedEntities(BaseModel):

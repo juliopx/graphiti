@@ -88,7 +88,12 @@ class OpenAIGenericClient(LLMClient):
         self.max_tokens = max_tokens
 
         if client is None:
-            self.client = AsyncOpenAI(api_key=config.api_key, base_url=config.base_url)
+            import httpx
+            self.client = AsyncOpenAI(
+                api_key=config.api_key,
+                base_url=config.base_url,
+                timeout=httpx.Timeout(300.0, connect=10.0),
+            )
         else:
             self.client = client
 

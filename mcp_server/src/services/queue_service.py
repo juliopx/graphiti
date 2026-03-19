@@ -107,6 +107,7 @@ class QueueService:
         episode_type: Any,
         entity_types: Any,
         uuid: str | None,
+        reference_time: datetime | None = None,
     ) -> int:
         """Add an episode for processing.
 
@@ -137,7 +138,7 @@ class QueueService:
                     source_description=source_description,
                     source=episode_type,
                     group_id=group_id,
-                    reference_time=datetime.now(timezone.utc),
+                    reference_time=reference_time or datetime.now(timezone.utc),
                     entity_types=entity_types,
                     uuid=uuid,
                 )
