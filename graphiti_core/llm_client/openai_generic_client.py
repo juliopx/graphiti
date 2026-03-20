@@ -149,6 +149,14 @@ class OpenAIGenericClient(LLMClient):
         group_id: str | None = None,
         prompt_name: str | None = None,
     ) -> dict[str, typing.Any]:
+        import os as _os, sys as _sys
+        if _os.environ.get('LOG_LEVEL') == 'DEBUG':
+            _sys.stderr.write(f'\n[DEBUG-LLM] prompt_name={prompt_name} model_size={model_size} msgs={len(messages)}\n')
+            for _i, _m in enumerate(messages):
+                _content = _m.content if isinstance(_m.content, str) else str(_m.content)
+                _sys.stderr.write(f'[DEBUG-LLM] msg[{_i}] role={_m.role} len={len(_content)}\n')
+                _sys.stderr.write(f'[DEBUG-LLM] CONTENT: {repr(_content[:2000])}\n')
+            _sys.stderr.flush()
         if max_tokens is None:
             max_tokens = self.max_tokens
 

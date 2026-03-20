@@ -59,6 +59,8 @@ RUN echo "${GRAPHITI_CORE_VERSION}" > /app/mcp/.graphiti-core-version
 # (models may return entity_name/text instead of name, source_entity instead of source_entity_name)
 COPY graphiti_core/prompts/extract_nodes.py .venv/lib/python3.11/site-packages/graphiti_core/prompts/extract_nodes.py
 COPY graphiti_core/prompts/extract_edges.py .venv/lib/python3.11/site-packages/graphiti_core/prompts/extract_edges.py
+COPY graphiti_core/llm_client/client.py .venv/lib/python3.11/site-packages/graphiti_core/llm_client/client.py
+COPY graphiti_core/llm_client/openai_generic_client.py .venv/lib/python3.11/site-packages/graphiti_core/llm_client/openai_generic_client.py
 
 # Copy MCP server application code
 COPY mcp_server/main.py ./

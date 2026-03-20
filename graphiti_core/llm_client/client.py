@@ -202,6 +202,12 @@ class LLMClient(ABC):
             span.add_attributes({'cache.hit': False})
 
             # Execute LLM call
+            import os as _os, sys as _sys
+            if _os.environ.get('LOG_LEVEL') == 'DEBUG':
+                _sys.stderr.write(f'\n[DEBUG-LLM] prompt_name={prompt_name} model_size={model_size}\n')
+                for _m in messages:
+                    _sys.stderr.write(f'[DEBUG-LLM] [{_m.role}]: {_m.content[:800]}...\n')
+                _sys.stderr.flush()
             try:
                 response = await self._generate_response_with_retry(
                     messages, response_model, max_tokens, model_size
