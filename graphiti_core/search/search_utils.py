@@ -200,10 +200,16 @@ async def edge_fulltext_search(
     if fuzzy_query == '':
         return []
 
-    match_query = """
-    YIELD relationship AS rel, score
-    MATCH (n:Entity)-[e:RELATES_TO {uuid: rel.uuid}]->(m:Entity)
-    """
+    if driver.provider == GraphProvider.FALKORDB:
+        match_query = """
+        YIELD relationship AS e, score
+        WITH e, score, startNode(e) AS n, endNode(e) AS m
+        """
+    else:
+        match_query = """
+        YIELD relationship AS rel, score
+        MATCH (n:Entity)-[e:RELATES_TO {uuid: rel.uuid}]->(m:Entity)
+        """
     if driver.provider == GraphProvider.KUZU:
         match_query = """
         YIELD node, score
