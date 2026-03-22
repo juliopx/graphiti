@@ -192,47 +192,36 @@ class FalkorSearchOperations(SearchOperations):
         if filter_queries:
             filter_query = ' WHERE ' + (' AND '.join(filter_queries))
 
+        vec_inline = ','.join(str(x) for x in search_vector)
         # Use native HNSW KNN index if no complex filters; fall back to full scan otherwise
         if not filter_queries:
             knn_limit = limit * 3  # over-fetch to allow post-filter by min_score
             cypher = (
-                f"CALL db.idx.vector.queryNodes('Entity', 'name_embedding', {knn_limit}, vecf32($search_vector))"
+                f"CALL db.idx.vector.queryNodes('Entity', 'name_embedding', {knn_limit}, vecf32([{vec_inline}]))"
                 + " YIELD node AS n, score"
-                + " WHERE score >= $min_score"
+                + f" WHERE score >= {min_score}"
                 + " RETURN "
                 + get_entity_node_return_query(GraphProvider.FALKORDB)
-                + " ORDER BY score DESC LIMIT $limit"
+                + f" ORDER BY score DESC LIMIT {limit}"
             )
-            records, _, _ = await executor.execute_query(
-                cypher,
-                search_vector=search_vector,
-                limit=limit,
-                min_score=min_score,
-            )
+            records, _, _ = await executor.execute_query(cypher)
         else:
             cypher = (
                 'MATCH (n:Entity)'
                 + filter_query
-                + """
-                WITH n, """
-                + get_vector_cosine_func_query(
-                    'n.name_embedding', '$search_vector', GraphProvider.FALKORDB
-                )
-                + """ AS score
-                WHERE score > $min_score
+                + f"""
+                WITH n, (2 - vec.cosineDistance(n.name_embedding, vecf32([{vec_inline}])))/2 AS score
+                WHERE score > {min_score}
                 RETURN
                 """
                 + get_entity_node_return_query(GraphProvider.FALKORDB)
-                + """
+                + f"""
                 ORDER BY score DESC
-                LIMIT $limit
+                LIMIT {limit}
                 """
             )
             records, _, _ = await executor.execute_query(
                 cypher,
-                search_vector=search_vector,
-                limit=limit,
-                min_score=min_score,
                 **filter_params,
             )
 
@@ -319,8 +308,8 @@ class FalkorSearchOperations(SearchOperations):
                 'edge_name_and_fact', limit=limit, provider=GraphProvider.FALKORDB
             )
             + """
-            YIELD relationship AS rel, score
-            MATCH (n:Entity)-[e:RELATES_TO {uuid: rel.uuid}]->(m:Entity)
+            YIELD relationship AS e, score
+            WITH e, score, startNode(e) AS n, endNode(e) AS m
             """
             + filter_query
             + """
@@ -374,48 +363,37 @@ class FalkorSearchOperations(SearchOperations):
         if filter_queries:
             filter_query = ' WHERE ' + (' AND '.join(filter_queries))
 
+        vec_inline = ','.join(str(x) for x in search_vector)
         # Use native HNSW KNN index if no complex filters; fall back to full scan otherwise
         if not filter_queries:
             knn_limit = limit * 3
             cypher = (
-                f"CALL db.idx.vector.queryRelationships('RELATES_TO', 'fact_embedding', {knn_limit}, vecf32($search_vector))"
+                f"CALL db.idx.vector.queryRelationships('RELATES_TO', 'fact_embedding', {knn_limit}, vecf32([{vec_inline}]))"
                 + " YIELD relationship AS e, score"
-                + " WHERE score >= $min_score"
+                + f" WHERE score >= {min_score}"
                 + " MATCH (n:Entity)-[e]->(m:Entity)"
                 + " RETURN "
                 + get_entity_edge_return_query(GraphProvider.FALKORDB)
-                + " ORDER BY score DESC LIMIT $limit"
+                + f" ORDER BY score DESC LIMIT {limit}"
             )
-            records, _, _ = await executor.execute_query(
-                cypher,
-                search_vector=search_vector,
-                limit=limit,
-                min_score=min_score,
-            )
+            records, _, _ = await executor.execute_query(cypher)
         else:
             cypher = (
                 'MATCH (n:Entity)-[e:RELATES_TO]->(m:Entity)'
                 + filter_query
-                + """
-                WITH DISTINCT e, n, m, """
-                + get_vector_cosine_func_query(
-                    'e.fact_embedding', '$search_vector', GraphProvider.FALKORDB
-                )
-                + """ AS score
-                WHERE score > $min_score
+                + f"""
+                WITH DISTINCT e, n, m, (2 - vec.cosineDistance(e.fact_embedding, vecf32([{vec_inline}])))/2 AS score
+                WHERE score > {min_score}
                 RETURN
                 """
                 + get_entity_edge_return_query(GraphProvider.FALKORDB)
-                + """
+                + f"""
                 ORDER BY score DESC
-                LIMIT $limit
+                LIMIT {limit}
                 """
             )
             records, _, _ = await executor.execute_query(
                 cypher,
-                search_vector=search_vector,
-                limit=limit,
-                min_score=min_score,
                 **filter_params,
             )
 
@@ -577,48 +555,36 @@ class FalkorSearchOperations(SearchOperations):
             group_filter_query += ' WHERE c.group_id IN $group_ids'
             query_params['group_ids'] = group_ids
 
+        vec_inline = ','.join(str(x) for x in search_vector)
         # Use native HNSW KNN index if no group filter; fall back to full scan otherwise
         if not group_ids:
             knn_limit = limit * 3
             cypher = (
-                f"CALL db.idx.vector.queryNodes('Community', 'name_embedding', {knn_limit}, vecf32($search_vector))"
+                f"CALL db.idx.vector.queryNodes('Community', 'name_embedding', {knn_limit}, vecf32([{vec_inline}]))"
                 + " YIELD node AS c, score"
-                + " WHERE score >= $min_score"
+                + f" WHERE score >= {min_score}"
                 + " RETURN "
                 + COMMUNITY_NODE_RETURN
-                + " ORDER BY score DESC LIMIT $limit"
+                + f" ORDER BY score DESC LIMIT {limit}"
             )
-            records, _, _ = await executor.execute_query(
-                cypher,
-                search_vector=search_vector,
-                limit=limit,
-                min_score=min_score,
-            )
+            records, _, _ = await executor.execute_query(cypher)
         else:
             cypher = (
                 'MATCH (c:Community)'
                 + group_filter_query
-                + """
-                WITH c,
-                """
-                + get_vector_cosine_func_query(
-                    'c.name_embedding', '$search_vector', GraphProvider.FALKORDB
-                )
-                + """ AS score
-                WHERE score > $min_score
+                + f"""
+                WITH c, (2 - vec.cosineDistance(c.name_embedding, vecf32([{vec_inline}])))/2 AS score
+                WHERE score > {min_score}
                 RETURN
                 """
                 + COMMUNITY_NODE_RETURN
-                + """
+                + f"""
                 ORDER BY score DESC
-                LIMIT $limit
+                LIMIT {limit}
                 """
             )
             records, _, _ = await executor.execute_query(
                 cypher,
-                search_vector=search_vector,
-                limit=limit,
-                min_score=min_score,
                 **query_params,
             )
 

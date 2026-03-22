@@ -62,6 +62,15 @@ COPY graphiti_core/prompts/extract_edges.py .venv/lib/python3.11/site-packages/g
 COPY graphiti_core/llm_client/client.py .venv/lib/python3.11/site-packages/graphiti_core/llm_client/client.py
 COPY graphiti_core/llm_client/openai_generic_client.py .venv/lib/python3.11/site-packages/graphiti_core/llm_client/openai_generic_client.py
 
+# Patch for native HNSW vector indexes and KNN queries (performance)
+COPY graphiti_core/graph_queries.py .venv/lib/python3.11/site-packages/graphiti_core/graph_queries.py
+COPY graphiti_core/driver/falkordb/operations/graph_ops.py .venv/lib/python3.11/site-packages/graphiti_core/driver/falkordb/operations/graph_ops.py
+COPY graphiti_core/driver/falkordb/operations/search_ops.py .venv/lib/python3.11/site-packages/graphiti_core/driver/falkordb/operations/search_ops.py
+# Patch for FalkorDB edge fulltext search: use startNode/endNode instead of slow re-MATCH
+# and add validate_group_ids helper required by patched search_utils
+COPY graphiti_core/search/search_utils_installed_patched.py .venv/lib/python3.11/site-packages/graphiti_core/search/search_utils.py
+COPY graphiti_core/helpers_installed_patched.py .venv/lib/python3.11/site-packages/graphiti_core/helpers.py
+
 # Copy MCP server application code
 COPY mcp_server/main.py ./
 COPY mcp_server/src/ ./src/
