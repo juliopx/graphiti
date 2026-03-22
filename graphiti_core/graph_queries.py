@@ -140,6 +140,22 @@ def get_fulltext_indices(provider: GraphProvider) -> list[LiteralString]:
     ]
 
 
+def get_vector_indices(provider: GraphProvider, embedding_dim: int = 1024) -> list[LiteralString]:
+    """Return HNSW vector index creation queries for the given provider."""
+    if provider == GraphProvider.FALKORDB:
+        from typing import cast
+
+        return cast(
+            list[LiteralString],
+            [
+                f"CREATE VECTOR INDEX FOR (n:Entity) ON (n.name_embedding) OPTIONS {{dimension:{embedding_dim}, similarityFunction:'cosine'}}",
+                f"CREATE VECTOR INDEX FOR ()-[r:RELATES_TO]-() ON (r.fact_embedding) OPTIONS {{dimension:{embedding_dim}, similarityFunction:'cosine'}}",
+                f"CREATE VECTOR INDEX FOR (n:Community) ON (n.name_embedding) OPTIONS {{dimension:{embedding_dim}, similarityFunction:'cosine'}}",
+            ],
+        )
+    return []
+
+
 def get_nodes_query(name: str, query: str, limit: int, provider: GraphProvider) -> str:
     if provider == GraphProvider.FALKORDB:
         label = NEO4J_TO_FALKORDB_MAPPING[name]
