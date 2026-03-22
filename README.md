@@ -39,6 +39,62 @@ Graphiti
 > Check out the new [MCP server for Graphiti](mcp_server/README.md)! Give Claude, Cursor, and other MCP clients powerful
 > context graph-based memory with temporal awareness.
 
+---
+
+## Fork patches (juliopx/graphiti)
+
+This fork adds patches on top of the upstream release, focused on running Graphiti with **local LLMs** (llama.cpp / Ollama) and **FalkorDB** as the graph backend.
+
+### Performance fix: FalkorDB edge fulltext search (90x speedup)
+
+**Problem:** `search_utils.py` used `MATCH (n:Entity)-[e:RELATES_TO {uuid: rel.uuid}]->(m:Entity)` after a fulltext `YIELD relationship AS rel` — this is an O(n²) pattern in FalkorDB that takes **~43 seconds** on graphs with ~3000 edges.
+
+**Fix:** Use `startNode(e)` / `endNode(e)` directly from the yielded relationship instead of re-MATCHing by UUID.
+
+Result: **43 000 ms → 500 ms** on a real graph (~3000 edges, BGE-M3 1024-dim embeddings).
+
+Patched files:
+- `graphiti_core/search/search_utils_installed_patched.py` → deployed over `search_utils.py` in the venv
+- `graphiti_core/helpers_installed_patched.py` → adds `validate_group_ids()` required by the patched search_utils
+- `graphiti_core/driver/falkordb/operations/search_ops.py` → same fix in `FalkorSearchOperations.edge_fulltext_search`
+- `mcp_server/docker/Dockerfile` → COPYs patched files into the venv so the fix survives image rebuilds
+
+### Native HNSW vector indexes for FalkorDB
+
+Adds `get_vector_indices()` in `graph_queries.py` and calls it from `build_indices_and_constraints` so that HNSW indexes are created at startup:
+
+```text
+CREATE VECTOR INDEX FOR (n:Entity) ON (n.name_embedding) OPTIONS {dimension:1024, similarityFunction:'cosine'}
+CREATE VECTOR INDEX FOR ()-[r:RELATES_TO]-() ON (r.fact_embedding) OPTIONS {dimension:1024, similarityFunction:'cosine'}
+CREATE VECTOR INDEX FOR (n:Community) ON (n.name_embedding) OPTIONS {dimension:1024, similarityFunction:'cosine'}
+```
+
+`edge_similarity_search` and `node_similarity_search` use `db.idx.vector.queryRelationships` / `db.idx.vector.queryNodes` (KNN) when no complex filters are present, falling back to full cosine scan otherwise.
+
+> **Note:** FalkorDB does not persist vector indexes in `dump.rdb`. Run `rebuild-indexes.sh` (in the mindbot `extensions/mind-memory/` directory) after every container restart.
+
+### Local LLM support
+
+- `factories.py`: uses `OpenAIGenericClient` when a custom `api_url` is configured, enabling llama.cpp / Ollama endpoints
+- `extract_nodes.py` / `extract_edges.py`: coerce non-standard field names returned by smaller models (`entity_name` → `name`, `source_entity` → `source_entity_name`, etc.)
+- `graphiti_mcp_server.py`: adds `reference_time` parameter to `add_memory`
+- `queue_service.py`: propagates `reference_time` through the episode queue
+
+### Docker image
+
+A single-container image (FalkorDB + MCP server) is published at `juliopx/graphiti-mcp:latest`. All patches above are baked in.
+
+```yaml
+# docker-compose snippet
+environment:
+  - FALKORDB_DATABASE=global_user_memory   # must match your group_id
+  - GRAPHITI_GROUP_ID=global_user_memory
+  - EMBEDDER_API_URL=http://your-host:8082/v1   # separate embedder endpoint
+  - LLM_MODEL=your-model-name
+```
+
+---
+
 Graphiti is a framework for building and querying temporal context graphs for AI agents. Unlike static knowledge graphs,
 Graphiti's context graphs track how facts change over time, maintain provenance to source data, and support both
 prescribed and learned ontology — making them purpose-built for agents operating on evolving, real-world data.
