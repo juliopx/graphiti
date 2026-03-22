@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from graphiti_core import Graphiti
 from graphiti_core.edges import EntityEdge
 from graphiti_core.nodes import EpisodeType, EpisodicNode
+from graphiti_core.search.search_config import EDGE_HYBRID_SEARCH_NODE_DISTANCE, EDGE_HYBRID_SEARCH_RRF
 from graphiti_core.search.search_filters import SearchFilters
 from graphiti_core.utils.maintenance.graph_data_operations import clear_data
 from mcp.server.fastmcp import FastMCP
@@ -530,17 +531,26 @@ async def search_memory_facts(
             else []
         )
 
-        relevant_edges = await client.search(
-            group_ids=effective_group_ids,
+        search_config = (
+            EDGE_HYBRID_SEARCH_RRF if center_node_uuid is None else EDGE_HYBRID_SEARCH_NODE_DISTANCE
+        )
+        search_config.limit = max_facts
+
+        search_results = await client._search(
             query=query,
-            num_results=max_facts,
+            config=search_config,
+            group_ids=effective_group_ids,
             center_node_uuid=center_node_uuid,
         )
 
-        if not relevant_edges:
+        if not search_results.edges:
             return FactSearchResponse(message='No relevant facts found', facts=[])
 
-        facts = [format_fact_result(edge) for edge in relevant_edges]
+        scores = search_results.edge_reranker_scores
+        facts = [
+            {**format_fact_result(edge), 'score': scores[i] if i < len(scores) else None}
+            for i, edge in enumerate(search_results.edges)
+        ]
         return FactSearchResponse(message='Facts retrieved successfully', facts=facts)
     except Exception as e:
         error_msg = str(e)
