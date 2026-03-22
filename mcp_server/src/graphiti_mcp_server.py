@@ -16,7 +16,12 @@ from dotenv import load_dotenv
 from graphiti_core import Graphiti
 from graphiti_core.edges import EntityEdge
 from graphiti_core.nodes import EpisodeType, EpisodicNode
-from graphiti_core.search.search_config import EDGE_HYBRID_SEARCH_NODE_DISTANCE, EDGE_HYBRID_SEARCH_RRF
+from graphiti_core.search.search_config import (
+    EdgeReranker,
+    EdgeSearchConfig,
+    EdgeSearchMethod,
+    SearchConfig,
+)
 from graphiti_core.search.search_filters import SearchFilters
 from graphiti_core.utils.maintenance.graph_data_operations import clear_data
 from mcp.server.fastmcp import FastMCP
@@ -531,10 +536,14 @@ async def search_memory_facts(
             else []
         )
 
-        search_config = (
-            EDGE_HYBRID_SEARCH_RRF if center_node_uuid is None else EDGE_HYBRID_SEARCH_NODE_DISTANCE
+        reranker = EdgeReranker.node_distance if center_node_uuid else EdgeReranker.rrf
+        search_config = SearchConfig(
+            edge_config=EdgeSearchConfig(
+                search_methods=[EdgeSearchMethod.cosine_similarity, EdgeSearchMethod.bm25],
+                reranker=reranker,
+            ),
+            limit=max_facts,
         )
-        search_config.limit = max_facts
 
         search_results = await client._search(
             query=query,
